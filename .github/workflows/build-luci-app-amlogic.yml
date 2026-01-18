@@ -1,20 +1,17 @@
-name: Build and Release luci-app-amlogic for OpenWrt 24.10.5
+name: Build and Release luci-app-amlogic
 on:
   workflow_dispatch:
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up build environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk \
-          gettext git java-propose-classpath intltool libelf-dev libglib2.0-dev \
-          libgtk2.0-dev libncurses5-dev libncursesw5-dev libssl-dev python3 \
-          python3-distutils python3-pyelftools unzip wget xsltproc zlib1g-dev zstd
+          sudo apt-get install -y $(curl -fsSL https://ophub.org/ubuntu2404-make-openwrt-depends)
 
       - name: Download and extract OpenWrt SDK
         run: |
@@ -27,12 +24,12 @@ jobs:
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          ./scripts/feeds install luci luci-base luci-lib-ipkg luci-i18n-base-ru kmod-tun
+          ./scripts/feeds install luci luci-base luci-lib-ipkg luci-i18n-base-ru luci-i18n-base-zh-cn kmod-tun
 
-      - name: Add luci-app-amlogic from ru_lang branch
+      - name: Add luci-app-amlogic package
         working-directory: openwrt-sdk
         run: |
-          git clone -b ru_lang https://github.com/mrnman66/luci-app-amlogic.git package/luci-app-amlogic
+          git clone https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
           ls -d package/luci-app-amlogic
 
       - name: Configure OpenWrt
@@ -40,11 +37,13 @@ jobs:
         run: |
           echo "CONFIG_PACKAGE_luci-app-amlogic=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-amlogic-ru=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-amlogic-zh-cn=y" >> .config
           echo "CONFIG_LUCI_LANG_ru=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh-cn=y" >> .config
           make defconfig
           cat .config | grep luci-app-amlogic
           cat .config | grep luci-i18n-amlogic-ru
-
+          cat .config | grep luci-i18n-amlogic-zh-cn
       - name: Compile luci-app-amlogic package
         working-directory: openwrt-sdk
         run: |
@@ -58,15 +57,36 @@ jobs:
       - name: Collect compiled packages
         run: |
           mkdir -p artifacts
-          find openwrt-sdk/bin/packages/ -type f -name "luci-app-amlogic_*.ipk" -exec cp {} artifacts/ \;
-          find openwrt-sdk/bin/packages/ -type f -name "luci-i18n-amlogic-ru_*.ipk" -exec cp {} artifacts/ \;
+          find openwrt-sdk/bin/packages/ -type f -name "luci-app-amlogic*.ipk" -exec cp {} artifacts/ \;
+          find openwrt-sdk/bin/packages/ -type f -name "luci-i18n-amlogic*.ipk" -exec cp {} artifacts/ \;
+
+          echo "=== Files in artifacts directory ==="
+          ls -lh artifacts/
+
+          # Get the main package file (luci-app-amlogic)
+          PKG_FILE="$(find artifacts/ -name "luci-app-amlogic*.ipk" -type f | head -n 1)"
+          PKG_NAME="$(basename "${PKG_FILE}")"
+          echo "Found main package: ${PKG_NAME}"
+
+          # Get version from package name
+          VERSION=$(echo "${PKG_NAME}" | cut -d'_' -f2 | cut -d'-' -f1)
+          echo "Extracted Version: ${VERSION}"
+
+          # Set version as environment variable for later steps
+          echo "LUCI_VERSION=${VERSION}" >> $GITHUB_ENV
 
       - name: Create Release and Upload Packages
-        uses: softprops/action-gh-release@v2
+        uses: ncipollo/release-action@main
         with:
-          tag_name: v${{ github.run_number }}
-          name: luci-app-amlogic Build ${{ github.run_number }}
-          body: Automated build of luci-app-amlogic and translations for OpenWrt 24.10.5 (armsr/armv8) from ru_lang branch
-          files: artifacts/*.ipk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ env.LUCI_VERSION }}
+          artifacts: artifacts/*
+          allowUpdates: true
+          removeArtifacts: false
+          replacesArtifacts: true
+          makeLatest: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            - Supports management of Amlogic s9xxx, Allwinner, and Rockchip boxes.
+              The current functions include install OpenWrt to EMMC,
+              Manually Upload Updates / Download Updates Online to update the OpenWrt firmware or kernel,
+              Backup / Restore firmware config, Snapshot management, etc.
