@@ -1,3 +1,7 @@
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/455ec33b-5a00-4881-9bb4-10d4aba42e89" alt="luci-app-amlogic" />
+</div>
+
 # luci-app-amlogic / 晶晨宝盒
 
 查看英文说明 | [View English description](README.md)
@@ -10,6 +14,10 @@
 
 - 如果你正在使用的 OpenWrt 没有这个插件，也可以手动安装。使用 SSH 登录 OpenWrt 系统的任意目录，或者在 `系统菜单` → `TTYD 终端` 里，运行一键安装命令，即可自动下载安装本插件。
 
+```yaml
+curl -fsSL ophub.org/luci-app-amlogic | bash
+```
+或者
 ```yaml
 curl -fsSL git.io/luci-app-amlogic | bash
 ```
